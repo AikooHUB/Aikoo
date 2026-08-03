@@ -1,0 +1,408 @@
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "TrophyTP"
+gui.ResetOnSpawn = false
+gui.Parent = PlayerGui
+
+local C = {
+    BG1 = Color3.fromRGB(28, 28, 30),
+    BG2 = Color3.fromRGB(44, 44, 46),
+    BLUE = Color3.fromRGB(10, 132, 255),
+    RED = Color3.fromRGB(255, 69, 58),
+    GREEN = Color3.fromRGB(0, 170, 0),
+    WHITE = Color3.new(1, 1, 1),
+    SUB = Color3.fromRGB(174, 174, 178)
+}
+local function Corner(obj, r)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, r)
+    c.Parent = obj
+end
+
+local shadow = Instance.new("Frame")
+shadow.Size = UDim2.new(0, 240, 0, 180)
+shadow.Position = UDim2.new(0.5, -120, 0.5, -90)
+shadow.BackgroundColor3 = Color3.new()
+shadow.BackgroundTransparency = 0.88
+shadow.BorderSizePixel = 0
+shadow.Parent = gui
+Corner(shadow, 22)
+
+local main = Instance.new("Frame")
+main.Size = UDim2.new(0, 230, 0, 170)
+main.Position = UDim2.new(0.5, -115, 0.5, -85)
+main.BackgroundColor3 = C.BG1
+main.BackgroundTransparency = 0.15
+main.BorderSizePixel = 0
+main.Active = true
+main.Parent = gui
+Corner(main, 22)
+
+local ORIGINAL_SIZE = main.Size
+local ORIGINAL_POS = main.Position
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = C.WHITE
+stroke.Thickness = 1
+stroke.Transparency = 0.93
+stroke.Parent = main
+
+local header = Instance.new("Frame")
+header.Size = UDim2.new(0, 140, 0, 24)
+header.Position = UDim2.new(0.5, -70, 0, 10)
+header.BackgroundColor3 = C.BG2
+header.BackgroundTransparency = 0.15
+header.BorderSizePixel = 0
+header.Parent = main
+Corner(header, 999)
+
+local headerStroke = Instance.new("UIStroke")
+headerStroke.Color = C.WHITE
+headerStroke.Transparency = 0.94
+headerStroke.Parent = header
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 1, 0)
+title.BackgroundTransparency = 1
+title.Text = "🏆 Trophy TP"
+title.Font = Enum.Font.BuilderSansBold
+title.TextSize = 13
+title.TextColor3 = C.WHITE
+title.Parent = header
+
+local minBtn = Instance.new("TextButton")
+minBtn.Size = UDim2.new(0, 22, 0, 22)
+minBtn.Position = UDim2.new(0, 6, 0, 8)
+minBtn.BackgroundColor3 = C.BG2
+minBtn.BackgroundTransparency = 0.15
+minBtn.Text = "–"
+minBtn.TextColor3 = C.WHITE
+minBtn.Font = Enum.Font.BuilderSansBold
+minBtn.TextSize = 18
+minBtn.BorderSizePixel = 0
+minBtn.Parent = main
+Corner(minBtn, 8)
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 22, 0, 22)
+closeBtn.Position = UDim2.new(1, -28, 0, 8)
+closeBtn.BackgroundColor3 = C.RED
+closeBtn.BackgroundTransparency = 0.15
+closeBtn.Text = "×"
+closeBtn.TextColor3 = C.WHITE
+closeBtn.Font = Enum.Font.BuilderSansBold
+closeBtn.TextSize = 14
+closeBtn.BorderSizePixel = 0
+closeBtn.Parent = main
+Corner(closeBtn, 11)
+closeBtn.MouseButton1Click:Connect(function() pcall(function() gui:Destroy() end) end)
+
+local infoLabel = Instance.new("TextLabel")
+infoLabel.Size = UDim2.new(1, -30, 0, 20)
+infoLabel.Position = UDim2.new(0, 15, 0, 44)
+infoLabel.BackgroundTransparency = 1
+infoLabel.Text = "Parts: 0 | Timer: 0s"
+infoLabel.TextColor3 = C.WHITE
+infoLabel.Font = Enum.Font.BuilderSans
+infoLabel.TextSize = 12
+infoLabel.TextWrapped = true
+infoLabel.TextXAlignment = Enum.TextXAlignment.Left
+infoLabel.Parent = main
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -30, 0, 16)
+statusLabel.Position = UDim2.new(0, 15, 0, 66)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "⏸ Idle"
+statusLabel.TextColor3 = C.SUB
+statusLabel.Font = Enum.Font.BuilderSans
+statusLabel.TextSize = 11
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.Parent = main
+
+local actionBtn = Instance.new("TextButton")
+actionBtn.Size = UDim2.new(1, -40, 0, 34)
+actionBtn.Position = UDim2.new(0, 20, 0, 90)
+actionBtn.BackgroundColor3 = C.GREEN
+actionBtn.BackgroundTransparency = 0.15
+actionBtn.Text = "▶ START"
+actionBtn.TextColor3 = C.WHITE
+actionBtn.Font = Enum.Font.BuilderSansBold
+actionBtn.TextSize = 13
+actionBtn.BorderSizePixel = 0
+actionBtn.Parent = main
+Corner(actionBtn, 18)
+
+local progressLabel = Instance.new("TextLabel")
+progressLabel.Size = UDim2.new(1, -30, 0, 16)
+progressLabel.Position = UDim2.new(0, 15, 0, 130)
+progressLabel.BackgroundTransparency = 1
+progressLabel.Text = ""
+progressLabel.TextColor3 = C.SUB
+progressLabel.Font = Enum.Font.BuilderSans
+progressLabel.TextSize = 10
+progressLabel.TextXAlignment = Enum.TextXAlignment.Center
+progressLabel.Parent = main
+
+local watermark = Instance.new("TextLabel")
+watermark.AnchorPoint = Vector2.new(0.5, 1)
+watermark.Size = UDim2.new(0, 180, 0, 16)
+watermark.Position = UDim2.new(0.5, 0, 1, 0)
+watermark.BackgroundTransparency = 1
+watermark.Text = "aikoosukanasipadang"
+watermark.TextColor3 = C.SUB
+watermark.TextTransparency = 0.3
+watermark.Font = Enum.Font.BuilderSans
+watermark.TextSize = 9
+watermark.TextXAlignment = Enum.TextXAlignment.Center
+watermark.Parent = main
+
+local bubble = Instance.new("TextButton")
+bubble.Size = UDim2.new(0, 70, 0, 30)
+bubble.Position = UDim2.new(1, -80, 1, -40)
+bubble.BackgroundColor3 = C.BG1
+bubble.BackgroundTransparency = 0.15
+bubble.Text = "🏆"
+bubble.TextColor3 = C.WHITE
+bubble.Font = Enum.Font.BuilderSansBold
+bubble.TextSize = 16
+bubble.BorderSizePixel = 0
+bubble.Visible = false
+bubble.Parent = gui
+Corner(bubble, 14)
+
+local function minimize()
+    main.Visible = false
+    shadow.Visible = false
+    bubble.Visible = true
+end
+local function restore()
+    bubble.Visible = false
+    main.Visible = true
+    shadow.Visible = true
+    main.Size = ORIGINAL_SIZE
+    main.Position = ORIGINAL_POS
+end
+minBtn.MouseButton1Click:Connect(minimize)
+bubble.MouseButton1Click:Connect(restore)
+
+local dragTarget = nil
+local dragging = false
+local dragStart, startPos
+
+local function isButton(inst)
+    if not inst then return false end
+    if inst:IsA("TextButton") or inst:IsA("ImageButton") then return true end
+    return isButton(inst.Parent)
+end
+
+main.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        if isButton(input.Parent) then return end
+        dragTarget = main
+        dragging = true
+        dragStart = input.Position
+        startPos = main.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+                dragTarget = nil
+            end
+        end)
+    end
+end)
+
+bubble.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        if isButton(input.Parent) then return end
+        dragTarget = bubble
+        dragging = true
+        dragStart = input.Position
+        startPos = bubble.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+                dragTarget = nil
+            end
+        end)
+    end
+end)
+
+UIS.InputChanged:Connect(function(input)
+    if dragging and dragTarget and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        if dragTarget == main then
+            main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            shadow.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X - 5, startPos.Y.Scale, startPos.Y.Offset + delta.Y - 5)
+        elseif dragTarget == bubble then
+            bubble.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end
+end)
+
+-- ==================== ENGINE ====================
+local targetParts = {}
+local running = false
+local timerRunning = false
+local timerStart = 0
+local timerDuration = 120 -- 2 menit
+local character = Player.Character
+local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+local tpLoop = nil
+local timerConnection = nil
+local tpDone = false
+
+local function updateCharacter()
+    character = Player.Character
+    if character then
+        rootPart = character:FindFirstChild("HumanoidRootPart")
+    end
+end
+updateCharacter()
+Player.CharacterAdded:Connect(updateCharacter)
+
+local function scanParts()
+    targetParts = {}
+    local trophy = workspace:FindFirstChild("Trophy")
+    if not trophy then
+        infoLabel.Text = "❌ Trophy not found"
+        progressLabel.Text = "0 parts"
+        return 0
+    end
+    for _, child in ipairs(trophy:GetDescendants()) do
+        if child:IsA("BasePart") then
+            table.insert(targetParts, child)
+        end
+    end
+    table.sort(targetParts, function(a, b) return a.Name < b.Name end)
+    infoLabel.Text = "Parts: " .. #targetParts .. " | Timer: " .. math.floor(timerRunning and (timerDuration - (tick() - timerStart)) or 0) .. "s"
+    progressLabel.Text = #targetParts .. " parts found"
+    return #targetParts
+end
+
+local function teleportToPart(part)
+    if not part or not part.Parent then return false end
+    if not rootPart or not rootPart.Parent then
+        updateCharacter()
+        if not rootPart then return false end
+    end
+    pcall(function()
+        rootPart.CFrame = CFrame.new(part.Position + Vector3.new(0, 3, 0))
+    end)
+    return true
+end
+
+local function doSingleTeleport()
+    if #targetParts == 0 then
+        statusLabel.Text = "❌ No parts"
+        return
+    end
+    local part = targetParts[1] -- hanya part pertama
+    if part and part.Parent then
+        local success = teleportToPart(part)
+        if success then
+            progressLabel.Text = "✅ Teleported to " .. part.Name
+            statusLabel.Text = "✅ Done - Off"
+            infoLabel.Text = "Parts: " .. #targetParts .. " | Done"
+        else
+            progressLabel.Text = "❌ Failed"
+            statusLabel.Text = "❌ Teleport failed"
+        end
+    else
+        progressLabel.Text = "❌ Part missing"
+        statusLabel.Text = "❌ Part missing"
+    end
+    -- Matikan semuanya
+    running = false
+    timerRunning = false
+    if timerConnection then
+        timerConnection:Disconnect()
+        timerConnection = nil
+    end
+    if tpLoop then
+        task.cancel(tpLoop)
+        tpLoop = nil
+    end
+    actionBtn.Text = "▶ START"
+    actionBtn.BackgroundColor3 = C.GREEN
+end
+
+local function startTimer()
+    if running then return end
+    scanParts()
+    if #targetParts == 0 then
+        statusLabel.Text = "❌ No parts found"
+        return
+    end
+    running = true
+    timerRunning = true
+    timerStart = tick()
+    tpDone = false
+    actionBtn.Text = "⏹ STOP"
+    actionBtn.BackgroundColor3 = C.RED
+    statusLabel.Text = "⏳ Waiting " .. timerDuration .. "s..."
+    progressLabel.Text = "Countdown: " .. timerDuration .. "s"
+
+    timerConnection = RunService.Heartbeat:Connect(function()
+        if not running then
+            timerConnection:Disconnect()
+            timerConnection = nil
+            return
+        end
+        local elapsed = tick() - timerStart
+        local remaining = math.max(0, timerDuration - elapsed)
+        infoLabel.Text = "Parts: " .. #targetParts .. " | Timer: " .. math.floor(remaining) .. "s"
+        progressLabel.Text = "Countdown: " .. math.floor(remaining) .. "s"
+
+        if remaining <= 0 then
+            timerConnection:Disconnect()
+            timerConnection = nil
+            timerRunning = false
+            statusLabel.Text = "✅ Timer done! Teleporting once..."
+            -- Teleport sekali
+            doSingleTeleport()
+        end
+    end)
+end
+
+local function stopAutoTP()
+    running = false
+    timerRunning = false
+    if tpLoop then
+        task.cancel(tpLoop)
+        tpLoop = nil
+    end
+    if timerConnection then
+        timerConnection:Disconnect()
+        timerConnection = nil
+    end
+    statusLabel.Text = "⏸ Stopped"
+    progressLabel.Text = ""
+    actionBtn.Text = "▶ START"
+    actionBtn.BackgroundColor3 = C.GREEN
+end
+
+actionBtn.MouseButton1Click:Connect(function()
+    if running then
+        stopAutoTP()
+    else
+        startTimer()
+    end
+end)
+
+scanParts()
+
+gui.Destroying:Connect(function()
+    if running then
+        running = false
+        if tpLoop then task.cancel(tpLoop); tpLoop = nil end
+        if timerConnection then timerConnection:Disconnect(); timerConnection = nil end
+    end
+end)
+
+print("🏆 Trophy TP (120s cooldown, single TP) loaded. Parts: " .. #targetParts)
