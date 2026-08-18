@@ -1,0 +1,327 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+local player = Players.LocalPlayer
+
+-- ==========================================
+-- 1. MEMBUAT GUI (ELEGANT BLACK)
+-- ==========================================
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AutoObbyGUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 260, 0, 170)
+mainFrame.Position = UDim2.new(0.5, -130, 0.5, -85)
+mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 8)
+mainCorner.Parent = mainFrame
+
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(45, 45, 45)
+mainStroke.Thickness = 1
+mainStroke.Parent = mainFrame
+
+local topBar = Instance.new("Frame")
+topBar.Size = UDim2.new(1, 0, 0, 35)
+topBar.BackgroundTransparency = 1
+topBar.BorderSizePixel = 0
+topBar.Parent = mainFrame
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -70, 1, 0)
+title.Position = UDim2.new(0, 15, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "BBC MOTD2 [David]"
+title.TextColor3 = Color3.fromRGB(240, 240, 240)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 14
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = topBar
+
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Size = UDim2.new(0, 35, 0, 35)
+minimizeBtn.Position = UDim2.new(1, -70, 0, 0)
+minimizeBtn.BackgroundTransparency = 1
+minimizeBtn.Text = "—"
+minimizeBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+minimizeBtn.Font = Enum.Font.GothamBold
+minimizeBtn.TextSize = 12
+minimizeBtn.Parent = topBar
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 35, 0, 35)
+closeBtn.Position = UDim2.new(1, -35, 0, 0)
+closeBtn.BackgroundTransparency = 1
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(200, 80, 80)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 14
+closeBtn.Parent = topBar
+
+local startBtn = Instance.new("TextButton")
+startBtn.Size = UDim2.new(0, 220, 0, 40)
+startBtn.Position = UDim2.new(0.5, -110, 0.5, -10)
+startBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+startBtn.Text = "Start Auto Obby"
+startBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+startBtn.Font = Enum.Font.GothamSemibold
+startBtn.TextSize = 14
+startBtn.Parent = mainFrame
+
+local startBtnCorner = Instance.new("UICorner")
+startBtnCorner.CornerRadius = UDim.new(0, 6)
+startBtnCorner.Parent = startBtn
+
+local startBtnStroke = Instance.new("UIStroke")
+startBtnStroke.Color = Color3.fromRGB(55, 55, 55)
+startBtnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+startBtnStroke.Parent = startBtn
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(0, 220, 0, 20)
+statusLabel.Position = UDim2.new(0.5, -110, 0.5, 45)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "Status: Idle"
+statusLabel.TextColor3 = Color3.fromRGB(160, 160, 160)
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextSize = 12
+statusLabel.Parent = mainFrame
+
+-- ==========================================
+-- 2. FUNGSI DRAG, MINIMIZE & CLOSE GUI
+-- ==========================================
+local dragging, dragInput, dragStart, startPos
+topBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then dragging = false end
+        end)
+    end
+end)
+topBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+local isMinimized = false
+minimizeBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    startBtn.Visible = not isMinimized
+    statusLabel.Visible = not isMinimized
+    mainFrame.Size = isMinimized and UDim2.new(0, 260, 0, 35) or UDim2.new(0, 260, 0, 170)
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+-- ==========================================
+-- 3. LOGIKA AUTO OBBY & AUTO REPLAY LOOP
+-- ==========================================
+local isRunning = false
+
+local tpPoints = {
+    Vector3.new(490, 282, 642), Vector3.new(502, 291, 705), Vector3.new(438, 310, 730),
+    Vector3.new(415, 303, 737), Vector3.new(370, 299, 737), Vector3.new(352, 299, 746),
+    Vector3.new(332, 299, 737), Vector3.new(297, 298, 735), Vector3.new(267, 309, 723),
+    Vector3.new(243, 310, 716), Vector3.new(224, 314, 728), Vector3.new(162, 310, 696),
+    Vector3.new(146, 317, 670), Vector3.new(98, 317, 637), Vector3.new(78, 282, 637),
+    Vector3.new(25, 322, 644), Vector3.new(-101, 287, 640), Vector3.new(-124, 296, 686),
+    Vector3.new(-115, 294, 710), Vector3.new(-117, 295, 743), Vector3.new(-114, 295, 822),
+    Vector3.new(-133, 348, 908), Vector3.new(-131, 369, 954), Vector3.new(-72, 369, 967),
+    Vector3.new(-49, 352, 975), Vector3.new(-18, 355, 1014), Vector3.new(9, 355, 1020),
+    Vector3.new(76, 359, 1051), Vector3.new(101, 400, 1053), Vector3.new(125, 405, 1055),
+    Vector3.new(154, 372, 1060), Vector3.new(214, 371, 1062), Vector3.new(221, 370, 1116),
+    Vector3.new(211, 372, 1171), Vector3.new(212, 378, 1227), Vector3.new(195, 380, 1292),
+    Vector3.new(78, 387, 1312), Vector3.new(55, 366, 1359), Vector3.new(61, 366, 1423),
+    Vector3.new(62, 366, 1533), Vector3.new(62, 422, 1630), Vector3.new(72, 421, 1663),
+    Vector3.new(145, 422, 1709), Vector3.new(170, 460, 1708), Vector3.new(241, 440, 1701),
+    Vector3.new(288, 432, 1709), Vector3.new(502, 433, 1717), Vector3.new(513, 431, 1776),
+    Vector3.new(473, 431, 1803), Vector3.new(458, 431, 1836), Vector3.new(415, 429, 1819),
+    Vector3.new(397, 429, 1861), Vector3.new(369, 429, 1894), Vector3.new(368, 434, 1927),
+    Vector3.new(368, 431, 2266)
+}
+
+-- Murni mencari tombol Replay yang sedang terbuka
+local function getVisibleReplayButton()
+    local playerGui = player:FindFirstChild("PlayerGui")
+    if not playerGui then return nil end
+    
+    for _, guiObj in pairs(playerGui:GetDescendants()) do
+        if guiObj:IsA("GuiButton") and guiObj.Name == "ReplayButton" then
+            if guiObj.Parent and guiObj.Parent.Visible then
+                return guiObj
+            end
+        end
+    end
+    return nil
+end
+
+-- Melakukan aksi klik paksa pada tombol yang ditemukan
+local function clickButton(targetBtn)
+    pcall(function()
+        if type(firesignal) == "function" then
+            firesignal(targetBtn.MouseButton1Up)
+            firesignal(targetBtn.MouseButton1Click)
+            firesignal(targetBtn.Activated)
+        elseif type(getconnections) == "function" then
+            for _, conn in pairs(getconnections(targetBtn.MouseButton1Up)) do
+                if type(conn.Function) == "function" then conn:Function() end
+            end
+        end
+        
+        local inset, _ = GuiService:GetGuiInset()
+        local absPos = targetBtn.AbsolutePosition
+        local absSize = targetBtn.AbsoluteSize
+        local x = absPos.X + (absSize.X / 2)
+        local y = absPos.Y + (absSize.Y / 2) + inset.Y
+        
+        VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 1)
+        task.wait(0.05)
+        VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 1)
+    end)
+end
+
+-- Fungsi Utama Loop
+local function autoObbyLoop()
+    while isRunning do
+        -- 1. SETUP KARAKTER
+        local character = player.Character or player.CharacterAdded:Wait()
+        local hrp = character:WaitForChild("HumanoidRootPart", 5)
+        
+        if not hrp then
+            task.wait(1)
+            continue
+        end
+        
+        local totalCP = #tpPoints
+        local TARGET_DURATION = math.random(131, 141)
+        local startTime = tick()
+        
+        -- 2. TWEEN KE AWAL
+        statusLabel.Text = "Status: Tweening ke titik awal..."
+        local tweenInfo = TweenInfo.new(3, Enum.EasingStyle.Linear)
+        local tween = TweenService:Create(hrp, tweenInfo, {CFrame = CFrame.new(490, 282, 610)})
+        tween:Play()
+        tween.Completed:Wait()
+        
+        -- 3. TP LOOP KE SEMUA CP
+        for i, point in ipairs(tpPoints) do
+            if not isRunning then break end
+            statusLabel.Text = "Progress CP: " .. i .. " / " .. totalCP
+            
+            local randomDelay = math.random(15, 20) / 10
+            task.wait(randomDelay)
+            
+            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                player.Character.HumanoidRootPart.CFrame = CFrame.new(point)
+            else
+                break
+            end
+        end
+        
+        -- 4. WAITING TIME
+        local elapsedTime = tick() - startTime
+        local timeLeft = TARGET_DURATION - elapsedTime
+        
+        while timeLeft > 0 and isRunning do
+            statusLabel.Text = "Sisa Waktu: " .. math.floor(timeLeft) .. " Detik"
+            task.wait(1)
+            elapsedTime = tick() - startTime
+            timeLeft = TARGET_DURATION - elapsedTime
+        end
+        
+        if not isRunning then break end
+        
+        -- 5. TP KE PORTAL
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            statusLabel.Text = "Status: Teleporting ke Portal!"
+            local teleportTarget = game:GetService("Workspace"):FindFirstChild("Utility")
+            
+            if teleportTarget and teleportTarget:FindFirstChild("Teleporters") and teleportTarget.Teleporters:FindFirstChild("Portal_to_Wc") and teleportTarget.Teleporters.Portal_to_Wc:FindFirstChild("Collision") then
+                local portalCollision = teleportTarget.Teleporters.Portal_to_Wc.Collision
+                player.Character.HumanoidRootPart.CFrame = portalCollision.CFrame
+                statusLabel.Text = "Status: Mencapai Portal!"
+            else
+                statusLabel.Text = "Error: Portal tidak ditemukan!"
+            end
+        end
+        
+        -- 6. MENUNGGU TOMBOL MUNCUL & KLIK SAMPAI HILANG (KONFIRMASI)
+        statusLabel.Text = "Status: Menunggu Tombol Replay..."
+        local activeReplayBtn = nil
+        
+        -- Loop A: Tunggu sampai UI Replay benar-benar muncul di layar
+        while isRunning do
+            activeReplayBtn = getVisibleReplayButton()
+            if activeReplayBtn then break end
+            task.wait(0.5)
+        end
+        
+        if not isRunning then break end
+        
+        -- Loop B: Tekan terus tombolnya SESEKALI sampai panelnya disembunyikan gamenya
+        statusLabel.Text = "Status: Mencoba tekan Replay..."
+        while isRunning and activeReplayBtn and activeReplayBtn.Parent and activeReplayBtn.Parent.Visible do
+            clickButton(activeReplayBtn)
+            task.wait(1) -- Beri jeda 1 detik tiap kali nembak klik, supaya ngga spamming server
+        end
+        
+        if not isRunning then break end
+        
+        statusLabel.Text = "Status: Replay Berhasil!"
+        
+        -- 7. WARM UP SEBELUM LOOP BERIKUTNYA
+        -- Timer ini HANYA akan jalan kalau Loop B di atas sudah tembus (tombol hilang karena berhasil diklik)
+        local warmupTime = math.random(20, 50) / 10
+        local timer = warmupTime
+        
+        while timer > 0 and isRunning do
+            statusLabel.Text = string.format("Status: Warm up %.1f detik...", timer)
+            task.wait(0.1)
+            timer = timer - 0.1
+        end
+    end
+    
+    -- JIKA LOOP DIHENTIKAN OLEH USER
+    startBtn.Text = "Start Auto Obby"
+    startBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    startBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+    statusLabel.Text = "Status: Idle"
+end
+
+-- ==========================================
+-- 4. TOMBOL TOGGLE (START / STOP)
+-- ==========================================
+startBtn.MouseButton1Click:Connect(function()
+    if isRunning then
+        isRunning = false
+        startBtn.Text = "Stopping Loop..."
+        startBtn.BackgroundColor3 = Color3.fromRGB(150, 100, 30)
+        statusLabel.Text = "Status: Membatalkan urutan..."
+    else
+        isRunning = true
+        startBtn.Text = "Stop Auto Obby"
+        startBtn.BackgroundColor3 = Color3.fromRGB(150, 40, 40)
+        startBtn.TextColor3 = Color3.fromRGB(255, 200, 200)
+        task.spawn(autoObbyLoop)
+    end
+end)
