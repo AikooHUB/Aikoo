@@ -1,0 +1,491 @@
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local CoreGui = game:GetService("CoreGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualUser = game:GetService("VirtualUser")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- Cek apakah GUI sebelumnya sudah ada, jika ada hapus dulu
+if CoreGui:FindFirstChild("CollectiblesGUI") then
+    CoreGui.CollectiblesGUI:Destroy()
+end
+
+-- Status Toggle
+local isAutoCollectActive = false
+local isAutoIslandActive = false
+local isAutoGachaActive = false
+local isAutoSequenceActive = false
+
+-- FITUR ANTI AFK OTOMATIS DI LATAR BELAKANG
+local antiAfkConnection
+antiAfkConnection = LocalPlayer.Idled:Connect(function()
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new())
+end)
+
+-- Fungsi bantu untuk mengecek apakah part berwarna emas
+local function isGoldColor(part)
+    local color = part.Color
+    if color.R > 0.7 and color.G > 0.5 and color.B < 0.3 then
+        return true
+    end
+    
+    local bColor = part.BrickColor.Name
+    if bColor == "Bright yellow" or bColor == "New Yeller" or bColor == "Deep orange" or bColor == "Neon orange" then
+        return true
+    end
+    
+    return false
+end
+
+-- 1. Buat ScreenGui Utama
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CollectiblesGUI"
+ScreenGui.Parent = CoreGui
+ScreenGui.ResetOnSpawn = false
+
+-- 2. Buat Main Frame (Window)
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 260, 0, 260)
+MainFrame.Position = UDim2.new(0.5, -130, 0.4, -130)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local UICornerMain = Instance.new("UICorner")
+UICornerMain.CornerRadius = UDim.new(0, 8)
+UICornerMain.Parent = MainFrame
+
+-- 3. Buat Top Bar (Header)
+local TopBar = Instance.new("Frame")
+TopBar.Name = "TopBar"
+TopBar.Size = UDim2.new(1, 0, 0, 35)
+TopBar.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+TopBar.BorderSizePixel = 0
+TopBar.Parent = MainFrame
+
+local UICornerTop = Instance.new("UICorner")
+UICornerTop.CornerRadius = UDim.new(0, 8)
+UICornerTop.Parent = TopBar
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(0, 180, 1, 0)
+Title.Position = UDim2.new(0, 10, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "Auto Farm + Anti AFK"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 13
+Title.Font = Enum.Font.SourceSansBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = TopBar
+
+-- Tombol Close (X)
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 30, 0, 30)
+CloseBtn.Position = UDim2.new(1, -35, 0, 2.5)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.TextSize = 14
+CloseBtn.Font = Enum.Font.SourceSansBold
+CloseBtn.Parent = TopBar
+
+local UICornerClose = Instance.new("UICorner")
+UICornerClose.CornerRadius = UDim.new(0, 6)
+UICornerClose.Parent = CloseBtn
+
+-- Tombol Minimize (-)
+local MinimizeBtn = Instance.new("TextButton")
+MinimizeBtn.Size = UDim2.new(0, 30, 0, 30)
+MinimizeBtn.Position = UDim2.new(1, -70, 0, 2.5)
+MinimizeBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+MinimizeBtn.Text = "-"
+MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinimizeBtn.TextSize = 16
+MinimizeBtn.Font = Enum.Font.SourceSansBold
+MinimizeBtn.Parent = TopBar
+
+local UICornerMin = Instance.new("UICorner")
+UICornerMin.CornerRadius = UDim.new(0, 6)
+UICornerMin.Parent = MinimizeBtn
+
+-- 4. Konten / Container Tombol
+local ContentContainer = Instance.new("Frame")
+ContentContainer.Name = "ContentContainer"
+ContentContainer.Size = UDim2.new(1, 0, 1, -35)
+ContentContainer.Position = UDim2.new(0, 0, 0, 35)
+ContentContainer.BackgroundTransparency = 1
+ContentContainer.Parent = MainFrame
+
+-- Tombol 1: Toggle Auto Collect Gold (Loop)
+local CollectToggleBtn = Instance.new("TextButton")
+CollectToggleBtn.Size = UDim2.new(0, 220, 0, 30)
+CollectToggleBtn.Position = UDim2.new(0.5, -110, 0, 10)
+CollectToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+CollectToggleBtn.Text = "Auto Gold: OFF"
+CollectToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CollectToggleBtn.TextSize = 13
+CollectToggleBtn.Font = Enum.Font.SourceSansBold
+CollectToggleBtn.Parent = ContentContainer
+
+local UICornerBtn1 = Instance.new("UICorner")
+UICornerBtn1.CornerRadius = UDim.new(0, 6)
+UICornerBtn1.Parent = CollectToggleBtn
+
+-- Tombol 2: Toggle Auto Island TP Only
+local IslandToggleBtn = Instance.new("TextButton")
+IslandToggleBtn.Size = UDim2.new(0, 220, 0, 30)
+IslandToggleBtn.Position = UDim2.new(0.5, -110, 0, 48)
+IslandToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+IslandToggleBtn.Text = "Auto Island TP: OFF"
+IslandToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+IslandToggleBtn.TextSize = 13
+IslandToggleBtn.Font = Enum.Font.SourceSansBold
+IslandToggleBtn.Parent = ContentContainer
+
+local UICornerBtn2 = Instance.new("UICorner")
+UICornerBtn2.CornerRadius = UDim.new(0, 6)
+UICornerBtn2.Parent = IslandToggleBtn
+
+-- Tombol 3: Toggle Auto Gacha
+local GachaToggleBtn = Instance.new("TextButton")
+GachaToggleBtn.Size = UDim2.new(0, 220, 0, 30)
+GachaToggleBtn.Position = UDim2.new(0.5, -110, 0, 86)
+GachaToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+GachaToggleBtn.Text = "Auto Gacha: OFF"
+GachaToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+GachaToggleBtn.TextSize = 13
+GachaToggleBtn.Font = Enum.Font.SourceSansBold
+GachaToggleBtn.Parent = ContentContainer
+
+local UICornerBtn3 = Instance.new("UICorner")
+UICornerBtn3.CornerRadius = UDim.new(0, 6)
+UICornerBtn3.Parent = GachaToggleBtn
+
+-- Tombol 4: Toggle Auto Sequence (Gold -> Island Loop)
+local SequenceToggleBtn = Instance.new("TextButton")
+SequenceToggleBtn.Size = UDim2.new(0, 220, 0, 30)
+SequenceToggleBtn.Position = UDim2.new(0.5, -110, 0, 124)
+SequenceToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+SequenceToggleBtn.Text = "Auto Seq (Gold->Island): OFF"
+SequenceToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SequenceToggleBtn.TextSize = 12
+SequenceToggleBtn.Font = Enum.Font.SourceSansBold
+SequenceToggleBtn.Parent = ContentContainer
+
+local UICornerBtn4 = Instance.new("UICorner")
+UICornerBtn4.CornerRadius = UDim.new(0, 6)
+UICornerBtn4.Parent = SequenceToggleBtn
+
+-- Status Label
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, 0, 0, 20)
+StatusLabel.Position = UDim2.new(0, 0, 1, -22)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "Status: Anti AFK Active"
+StatusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+StatusLabel.TextSize = 12
+StatusLabel.Font = Enum.Font.SourceSansItalic
+StatusLabel.Parent = ContentContainer
+
+
+--- EVENT KONEKSI TOMBOL ---
+
+-- 1. Logika Auto Gold (Loop)
+CollectToggleBtn.MouseButton1Click:Connect(function()
+    isAutoCollectActive = not isAutoCollectActive
+    
+    if isAutoCollectActive then
+        CollectToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 127)
+        CollectToggleBtn.Text = "Auto Gold: ON"
+        StatusLabel.Text = "Status: Memulai Auto Gold (Loop)..."
+        
+        task.spawn(function()
+            while isAutoCollectActive do
+                local character = LocalPlayer.Character
+                if not character or not character:FindFirstChild("HumanoidRootPart") then
+                    StatusLabel.Text = "Status: Karakter tidak ada!"
+                    task.wait(1)
+                    continue
+                end
+                
+                local hrp = character.HumanoidRootPart
+                
+                StatusLabel.Text = "Status: TP ke titik awal..."
+                hrp.CFrame = CFrame.new(495.53, 15.20, 958.38)
+                task.wait(1.0)
+                
+                if not isAutoCollectActive then break end
+                
+                StatusLabel.Text = "Status: Bersiap mengambil item emas..."
+                task.wait(0.5)
+                
+                for _, folder in ipairs(Workspace:GetChildren()) do
+                    if not isAutoCollectActive then break end
+                    if folder:IsA("Folder") and folder.Name:match("^LocalCollectibles_") then
+                        for _, item in ipairs(folder:GetChildren()) do
+                            if not isAutoCollectActive then break end
+                            
+                            if item:IsA("BasePart") and isGoldColor(item) then
+                                StatusLabel.Text = "Status: Mengambil item emas (" .. item.Name .. ")"
+                                hrp.CFrame = item.CFrame + Vector3.new(0, 3, 0)
+                                task.wait(0.2)
+                                
+                                local prompt = item:FindFirstChildOfClass("ProximityPrompt")
+                                if prompt then
+                                    pcall(function() fireproximityprompt(prompt) end)
+                                else
+                                    local touchInterest = item:FindFirstChild("TouchInterest")
+                                    if touchInterest then
+                                        firetouchinterest(hrp, item, 0)
+                                        task.wait(0.1)
+                                        firetouchinterest(hrp, item, 1)
+                                    end
+                                end
+                                task.wait(0.15)
+                            end
+                        end
+                    end
+                end
+                
+                if not isAutoCollectActive then break end
+                
+                StatusLabel.Text = "Status: Selesai putaran ini, pindah ke Koor Akhir..."
+                task.wait(0.5)
+                
+                hrp.CFrame = CFrame.new(491.18, 46.30, -5056.67)
+                StatusLabel.Text = "Status: Menunggu putaran berikutnya..."
+                task.wait(1.5)
+            end
+            
+            CollectToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+            CollectToggleBtn.Text = "Auto Gold: OFF"
+            StatusLabel.Text = "Status: Auto Gold dimatikan"
+        end)
+        
+    else
+        CollectToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        CollectToggleBtn.Text = "Auto Gold: OFF"
+        StatusLabel.Text = "Status: Auto Gold dimatikan"
+    end
+end)
+
+-- 2. Logika Auto Island (Teleport Saja)
+IslandToggleBtn.MouseButton1Click:Connect(function()
+    isAutoIslandActive = not isAutoIslandActive
+    
+    if isAutoIslandActive then
+        IslandToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 127)
+        IslandToggleBtn.Text = "Auto Island TP: ON"
+        StatusLabel.Text = "Status: Memulai Auto Island TP..."
+        
+        task.spawn(function()
+            while isAutoIslandActive do
+                local character = LocalPlayer.Character
+                if not character or not character:FindFirstChild("HumanoidRootPart") then
+                    StatusLabel.Text = "Status: Karakter tidak ada!"
+                    task.wait(1)
+                    continue
+                end
+                
+                local hrp = character.HumanoidRootPart
+                
+                local playerID = nil
+                for _, folder in ipairs(Workspace:GetChildren()) do
+                    if folder:IsA("Folder") and folder.Name:match("^LocalCollectibles_") then
+                        playerID = folder.Name:match("_(%d+)$")
+                        break
+                    end
+                end
+                
+                local islandsFolder = Workspace:FindFirstChild("Islands")
+                if islandsFolder and playerID then
+                    local targetIslandName = "Island_" .. playerID
+                    local island = islandsFolder:FindFirstChild(targetIslandName)
+                    
+                    if island then
+                        for _, block in ipairs(island:GetChildren()) do
+                            if not isAutoIslandActive then break end
+                            
+                            if block:IsA("BasePart") then
+                                StatusLabel.Text = "Status: TP ke " .. block.Name
+                                hrp.CFrame = block.CFrame + Vector3.new(0, 3, 0)
+                                task.wait(0.2)
+                            end
+                        end
+                        StatusLabel.Text = "Status: Selesai satu putaran Island TP"
+                    else
+                        StatusLabel.Text = "Status: Island_" .. playerID .. " tidak ditemukan!"
+                    end
+                else
+                    StatusLabel.Text = "Status: Gagal mendeteksi Player ID/Folder Islands!"
+                end
+                
+                task.wait(1)
+            end
+            
+            IslandToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+            IslandToggleBtn.Text = "Auto Island TP: OFF"
+            StatusLabel.Text = "Status: Auto Island TP dimatikan"
+        end)
+        
+    else
+        IslandToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        IslandToggleBtn.Text = "Auto Island TP: OFF"
+        StatusLabel.Text = "Status: Auto Island TP dimatikan"
+    end
+end)
+
+-- 3. Logika Auto Gacha
+GachaToggleBtn.MouseButton1Click:Connect(function()
+    isAutoGachaActive = not isAutoGachaActive
+    
+    if isAutoGachaActive then
+        GachaToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 127)
+        GachaToggleBtn.Text = "Auto Gacha: ON"
+        StatusLabel.Text = "Status: Memulai Auto Gacha..."
+        
+        task.spawn(function()
+            local args = {
+                10,
+                "Juicy"
+            }
+            
+            while isAutoGachaActive do
+                StatusLabel.Text = "Status: Melakukan Roll Gacha (Juicy)..."
+                
+                pcall(function()
+                    ReplicatedStorage:WaitForChild("RollPrize"):InvokeServer(unpack(args))
+                end)
+                
+                task.wait(0.5)
+            end
+            
+            GachaToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+            GachaToggleBtn.Text = "Auto Gacha: OFF"
+            StatusLabel.Text = "Status: Auto Gacha dimatikan"
+        end)
+        
+    else
+        GachaToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        GachaToggleBtn.Text = "Auto Gacha: OFF"
+        StatusLabel.Text = "Status: Auto Gacha dimatikan"
+    end
+end)
+
+-- 4. Logika Auto Sequence (Gold -> Island Loop Otomatis)
+SequenceToggleBtn.MouseButton1Click:Connect(function()
+    isAutoSequenceActive = not isAutoSequenceActive
+    
+    if isAutoSequenceActive then
+        SequenceToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 127)
+        SequenceToggleBtn.Text = "Auto Seq: ON"
+        StatusLabel.Text = "Status: Memulai Urutan (Gold -> Island)..."
+        
+        task.spawn(function()
+            while isAutoSequenceActive do
+                local character = LocalPlayer.Character
+                if not character or not character:FindFirstChild("HumanoidRootPart") then
+                    StatusLabel.Test = "Status [Seq]: Karakter tidak ada!"
+                    task.wait(1)
+                    continue
+                end
+                
+                local hrp = character.HumanoidRootPart
+                
+                ------------------------------------------------------------------
+                -- TAHAP 1: JALANKAN AUTO GOLD SAMPAI SELESAI
+                ------------------------------------------------------------------
+                StatusLabel.Text = "Status [Seq]: [1/2] Menjalankan Auto Gold..."
+                hrp.CFrame = CFrame.new(495.53, 15.20, 958.38)
+                task.wait(1.0)
+                
+                if not isAutoSequenceActive then break end
+                
+                for _, folder in ipairs(Workspace:GetChildren()) do
+                    if not isAutoSequenceActive then break end
+                    if folder:IsA("Folder") and folder.Name:match("^LocalCollectibles_") then
+                        for _, item in ipairs(folder:GetChildren()) do
+                            if not isAutoSequenceActive then break end
+                            
+                            if item:IsA("BasePart") and isGoldColor(item) then
+                                StatusLabel.Text = "Status [Seq]: Mengambil item emas (" .. item.Name .. ")"
+                                hrp.CFrame = item.CFrame + Vector3.new(0, 3, 0)
+                                task.wait(0.2)
+                                
+                                local prompt = item:FindFirstChildOfClass("ProximityPrompt")
+                                if prompt then
+                                    pcall(function() fireproximityprompt(prompt) end)
+                                else
+                                    local touchInterest = item:FindFirstChild("TouchInterest")
+                                    if touchInterest then
+                                        firetouchinterest(hrp, item, 0)
+                                        task.wait(0.1)
+                                        firetouchinterest(hrp, item, 1)
+                                    end
+                                end
+                                task.wait(0.15)
+                            end
+                        end
+                    end
+                end
+                
+                if not isAutoSequenceActive then break end
+                
+                -- TP ke kord akhir Auto Gold
+                hrp.CFrame = CFrame.new(491.18, 46.30, -5056.67)
+                task.wait(1.0)
+                
+                ------------------------------------------------------------------
+                -- TAHAP 2: JALANKAN AUTO ISLAND TP SAMPAI SELESAI
+                ------------------------------------------------------------------
+                StatusLabel.Text = "Status [Seq]: [2/2] Menjalankan Auto Island TP..."
+                
+                local playerID = nil
+                for _, folder in ipairs(Workspace:GetChildren()) do
+                    if folder:IsA("Folder") and folder.Name:match("^LocalCollectibles_") then
+                        playerID = folder.Name:match("_(%d+)$")
+                        break
+                    end
+                end
+                
+                local islandsFolder = Workspace:FindFirstChild("Islands")
+                if islandsFolder and playerID then
+                    local targetIslandName = "Island_" .. playerID
+                    local island = islandsFolder:FindFirstChild(targetIslandName)
+                    
+                    if island then
+                        for _, block in ipairs(island:GetChildren()) do
+                            if not isAutoSequenceActive then break end
+                            
+                            if block:IsA("BasePart") then
+                                StatusLabel.Text = "Status [Seq]: TP ke " .. block.Name
+                                hrp.CFrame = block.CFrame + Vector3.new(0, 3, 0)
+                                task.wait(0.2)
+                            end
+                        end
+                    end
+                end
+                
+                StatusLabel.Text = "Status [Seq]: Satu siklus selesai, mengulang dari awal..."
+                task.wait(1.5)
+            end
+            
+            SequenceToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+            SequenceToggleBtn.Text = "Auto Seq (Gold->Island): OFF"
+            StatusLabel.Text = "Status: Auto Sequence dimatikan"
+        end)
+        
+    else
+        SequenceToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        SequenceToggleBtn.Text = "Auto Seq (Gold->Island): OFF"
+        StatusLabel.Text = "Status: Auto Sequence dimatikan"
+    end
+end)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    isAuto
