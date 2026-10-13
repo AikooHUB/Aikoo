@@ -1,0 +1,959 @@
+if _G.AIKOO_CLEANUP then
+    pcall(_G.AIKOO_CLEANUP)
+    task.wait(0.3)
+end
+
+local player = game:GetService("Players").LocalPlayer
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local CoreGui = game:GetService("CoreGui")
+local HttpService = game:GetService("HttpService")
+
+local CONFIG_FILE = "aikoo_morgue_config.json"
+
+local running = true
+local connections = {}
+local trackedGuis = {}
+
+local function trackConn(c) table.insert(connections, c) return c end
+local function trackGui(g) table.insert(trackedGuis, g) return g end
+
+_G.AIKOO_CLEANUP = function()
+    running = false
+    for _, c in ipairs(connections) do pcall(function() c:Disconnect() end) end
+    connections = {}
+    for _, g in ipairs(trackedGuis) do pcall(function() if g and g.Parent then g:Destroy() end end) end
+    trackedGuis = {}
+    pcall(function()
+        for _, g in ipairs(CoreGui:GetChildren()) do
+            local n = g.Name:lower()
+            if n:find("rayfield") or n:find("aikoo") or n:find("morgueesp") or n:find("esp_") then
+                g:Destroy()
+            end
+        end
+    end)
+    local char = player.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then pcall(function() hum.WalkSpeed = 16 end) end
+        for _, p in ipairs(char:GetDescendants()) do
+            if p:IsA("BasePart") then pcall(function() p.CanCollide = true end) end
+        end
+    end
+    pcall(function()
+        player.CameraMode = Enum.CameraMode.Classic
+        player.CameraMinZoomDistance = 0.5
+        player.CameraMaxZoomDistance = 400
+    end)
+    print("[AIKOO] Cleanup done")
+end
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "The Morgue | AIKOO",
+    LoadingTitle = "AIKOO",
+    LoadingSubtitle = "Loading..",
+    ConfigurationSaving = { Enabled = false },
+    Discord = { Enabled = false },
+    KeySystem = false
+})
+
+local MainTab = Window:CreateTab("Main", 4483362458)
+local RuanganTab = Window:CreateTab("Ruangan", 4483362458)
+local HalloweenTab = Window:CreateTab("Halloween", 4483362458)
+
+local S = {
+    espEntity = false, espHW = false, ws = 20,
+    noclip = false, void = false, piket = false,
+    instant = false, tpRun = false, tpDelay = 0.5,
+    safeTP = false, safeRadius = 25,
+    camMin = 0.5, camMax = 400, camPOV = false,
+    promptEnabled = false, promptDistance = 50,
+    autoCandyTP = false, autoCandyDelay = 0.5
+}
+
+local HW_KW = {"Candy","Pumpkin","TrickOrTreat","Labu","Permen","Treat","Sweet"}
+local CANDY_KW = {"Candy", "Pumpkin"}
+local ui = {}
+
+local function char() return player.Character end
+local function hrp() local c=char() return c and c:FindFirstChild("HumanoidRootPart") end
+local function hum() local c=char() return c and c:FindFirstChildOfClass("Humanoid") end
+local function log(msg) print("[AIKOO] " .. msg) end
+local function matchKw(name, list)
+    if not name then return false end
+    local l = name:lower()
+    for _, k in ipairs(list) do if l:find(k:lower(), 1, true) then return true end end
+    return false
+end
+
+local wsConnection = nil
+
+local function applyWS()
+    if not running then return end
+    local c = char()
+    if not c then return end
+    local h = c:FindFirstChildOfClass("Humanoid")
+    if h and h.WalkSpeed ~= S.ws then h.WalkSpeed = S.ws end
+end
+
+local function bindHumanoid(h)
+    if wsConnection then wsConnection:Disconnect() wsConnection = nil end
+    if h and running then
+        wsConnection = trackConn(h:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+            if running and h.WalkSpeed ~= S.ws then h.WalkSpeed = S.ws end
+        end))
+        h.WalkSpeed = S.ws
+    end
+end
+
+local function applyCamera()
+    if not running then return end
+    pcall(function()
+        if player.CameraMode ~= Enum.CameraMode.Classic then
+            player.CameraMode = Enum.CameraMode.Classic
+        end
+        if S.camPOV then
+            player.CameraMinZoomDistance = 0.5
+            player.CameraMaxZoomDistance = 0.5
+        else
+            if player.CameraMinZoomDistance ~= S.camMin then player.CameraMinZoomDistance = S.camMin end
+            if player.CameraMaxZoomDistance ~= S.camMax then player.CameraMaxZoomDistance = S.camMax end
+        end
+    end)
+end
+
+local originalDistances = {}
+
+local function setPromptDistance(prompt)
+    if not prompt:IsA("ProximityPrompt") then return end
+    if originalDistances[prompt] == nil then originalDistances[prompt] = prompt.MaxActivationDistance end
+    if S.promptEnabled then
+        prompt.MaxActivationDistance = S.promptDistance
+    else
+        prompt.MaxActivationDistance = originalDistances[prompt]
+    end
+end
+
+local function updateAllPrompts()
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("ProximityPrompt") then setPromptDistance(obj) end
+    end
+end
+
+trackConn(workspace.DescendantAdded:Connect(function(obj)
+    if obj:IsA("ProximityPrompt") then
+        task.wait()
+        if running then setPromptDistance(obj) end
+    end
+end))
+
+local function getSpawnPart()
+    local sp = workspace:FindFirstChild("Spawn")
+    if not sp then return nil end
+    if sp:IsA("BasePart") then return sp end
+    return sp:FindFirstChildWhichIsA("BasePart", true)
+end
+
+local function tpToSpawn()
+    local h = hrp()
+    local sp = getSpawnPart()
+    if h and sp then
+        h.CFrame = sp.CFrame + Vector3.new(0, 3, 0)
+        return true
+    end
+    return false
+end
+
+local espFolder = trackGui(Instance.new("Folder", CoreGui))
+espFolder.Name = "MorgueESP"
+local espCache = {}
+
+local function makeESP(model, fill, outline, label)
+    if not running or not model or not model.Parent then return end
+    local key = tostring(model:GetDebugId())
+    if espCache[key] and espCache[key].Parent then return end
+    local anchor = model:IsA("BasePart") and model or model:FindFirstChild("HumanoidRootPart") or model:FindFirstChildWhichIsA("BasePart")
+    if not anchor then return end
+
+    local hl = Instance.new("Highlight", espFolder)
+    hl.Adornee = model
+    hl.FillColor = fill
+    hl.OutlineColor = outline
+    hl.FillTransparency = 0.4
+    hl.OutlineTransparency = 0.1
+    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+
+    local bb = Instance.new("BillboardGui", espFolder)
+    bb.Size = UDim2.new(0, 120, 0, 24)
+    bb.StudsOffset = Vector3.new(0, 3, 0)
+    bb.AlwaysOnTop = true
+    bb.Adornee = anchor
+
+    local lbl = Instance.new("TextLabel", bb)
+    lbl.Size = UDim2.fromScale(1, 1)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = label or model.Name
+    lbl.TextColor3 = Color3.fromRGB(255, 230, 200)
+    lbl.TextStrokeTransparency = 0.2
+    lbl.TextScaled = true
+    lbl.Font = Enum.Font.GothamBold
+
+    espCache[key] = hl
+end
+
+local function refreshESP()
+    if not running then return end
+    for _, c in ipairs(espFolder:GetChildren()) do c:Destroy() end
+    espCache = {}
+
+    if S.espEntity then
+        local patrol = workspace:FindFirstChild("Patrol")
+        if patrol then
+            for _, o in ipairs(patrol:GetDescendants()) do
+                if o:IsA("Model") and not matchKw(o.Name, HW_KW) then
+                    makeESP(o, Color3.fromRGB(255,0,0), Color3.fromRGB(255,255,255), "Pocong: "..o.Name)
+                end
+            end
+        end
+        local story = workspace:FindFirstChild("Story")
+        local jc = story and story:FindFirstChild("ActiveTrolley") and story.ActiveTrolley:FindFirstChild("Jumpscare")
+        if jc then
+            for _, o in ipairs(jc:GetDescendants()) do
+                if o:IsA("Model") then makeESP(o, Color3.fromRGB(255,165,0), Color3.fromRGB(255,255,255), "Jumpscare: "..o.Name) end
+            end
+        end
+        local hw = workspace:FindFirstChild("Halloween")
+        local reaper = hw and hw:FindFirstChild("ActiveReaper")
+        if reaper then
+            if reaper:IsA("Model") or reaper:IsA("BasePart") then
+                makeESP(reaper, Color3.fromRGB(160,0,255), Color3.fromRGB(255,255,255), "Reaper: "..reaper.Name)
+            else
+                for _, o in ipairs(reaper:GetDescendants()) do
+                    if o:IsA("Model") then makeESP(o, Color3.fromRGB(160,0,255), Color3.fromRGB(255,255,255), "Reaper: "..o.Name) end
+                end
+            end
+        end
+    end
+
+    if S.espHW then
+        for _, o in ipairs(workspace:GetDescendants()) do
+            if matchKw(o.Name, HW_KW) and (o:IsA("Model") or o:IsA("BasePart")) then
+                makeESP(o, Color3.fromRGB(255,200,0), Color3.fromRGB(255,120,0), o.Name)
+            end
+        end
+    end
+end
+
+local function interactNearby(radius, onlyHW)
+    if not running then return 0 end
+    local h = hrp()
+    if not h then return 0 end
+    local n = 0
+    for _, o in ipairs(workspace:GetDescendants()) do
+        if o:IsA("ProximityPrompt") and o.Enabled then
+            local p = o.Parent
+            if p and p:IsA("BasePart") then
+                local fire = true
+                if onlyHW then
+                    fire = false
+                    local cur = p
+                    while cur do
+                        if cur.Name == "Halloween" or matchKw(cur.Name, HW_KW) then fire = true break end
+                        cur = cur.Parent
+                    end
+                end
+                if fire and (h.Position - p.Position).Magnitude <= radius then
+                    pcall(function() fireproximityprompt(o) end)
+                    n = n + 1
+                end
+            end
+        end
+    end
+    return n
+end
+
+trackConn(ProximityPromptService.PromptButtonHoldBegan:Connect(function(p)
+    if running and S.instant then pcall(function() fireproximityprompt(p) end) end
+end))
+
+local function getBroom()
+    local c = char()
+    if not c then return nil end
+    for _, t in ipairs(c:GetChildren()) do if t:IsA("Tool") then return t end end
+    local bp = player:FindFirstChild("Backpack")
+    if bp then
+        for _, t in ipairs(bp:GetChildren()) do if t:IsA("Tool") then return t end end
+    end
+    return nil
+end
+
+local function hasToolEquipped()
+    local c = char()
+    if not c then return false end
+    for _, t in ipairs(c:GetChildren()) do if t:IsA("Tool") then return true end end
+    return false
+end
+
+local function equipBroomOnce()
+    if hasToolEquipped() then return true end
+    local c = char()
+    local h = hum()
+    if not c or not h then return false end
+    local broom = getBroom()
+    if not broom then return false end
+    pcall(function() h:EquipTool(broom) end)
+    task.wait(0.3)
+    return true
+end
+
+local function pressOne()
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.One, false, game)
+        task.wait(0.05)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.One, false, game)
+    end)
+end
+
+local broomEquipped = false
+
+local function doPiket()
+    if not running then return end
+    local stainFolder = workspace:FindFirstChild("Stain")
+    if not stainFolder then return end
+
+    local stains = {}
+    for _, s in ipairs(stainFolder:GetChildren()) do table.insert(stains, s) end
+
+    if #stains == 0 then
+        if broomEquipped then
+            broomEquipped = false
+            log("Stain habis - balik ke Spawn")
+            tpToSpawn()
+            task.wait(1)
+        end
+        return
+    end
+
+    local h = hrp()
+    if not h then return end
+
+    if not broomEquipped then
+        equipBroomOnce()
+        task.wait(0.2)
+        broomEquipped = true
+    end
+
+    for _, stain in ipairs(stains) do
+        if not running or not S.piket then break end
+        if not stain or not stain.Parent then continue end
+
+        local target
+        if stain:IsA("BasePart") then target = stain
+        else target = stain:FindFirstChildWhichIsA("BasePart", true) end
+        if not target then continue end
+
+        if not hasToolEquipped() then equipBroomOnce() end
+
+        h.CFrame = target.CFrame + Vector3.new(0, 3, 0)
+        task.wait(0.2)
+
+        pressOne()
+        task.wait(0.2)
+        pressOne()
+        task.wait(0.3)
+
+        local timeout = tick() + 10
+        while running and S.piket and stain and stain.Parent and tick() < timeout do
+            pressOne()
+            task.wait(0.4)
+        end
+        task.wait(0.2)
+    end
+end
+
+-- ============================================
+-- SAFE ZONE
+-- ============================================
+local function getNearestPocong()
+    local h = hrp()
+    if not h then return nil, math.huge end
+    local patrol = workspace:FindFirstChild("Patrol")
+    if not patrol then return nil, math.huge end
+    local nearest, minDist = nil, math.huge
+    for _, o in ipairs(patrol:GetChildren()) do
+        if o:IsA("Model") and not matchKw(o.Name, HW_KW) then
+            local root = o:FindFirstChild("HumanoidRootPart") or o:FindFirstChildWhichIsA("BasePart")
+            if root then
+                local d = (h.Position - root.Position).Magnitude
+                if d < minDist then
+                    minDist = d
+                    nearest = o
+                end
+            end
+        end
+    end
+    return nearest, minDist
+end
+
+local function safeZoneCheck()
+    if not running or not S.safeTP then return end
+    local pocong, dist = getNearestPocong()
+    if pocong and dist <= S.safeRadius then
+        S.piket = false
+        tpToSpawn()
+    end
+end
+
+-- ============================================
+-- KABUR
+-- ============================================
+local function kabur()
+    local gp = ReplicatedStorage:FindFirstChild("Gameplay")
+    if not gp then return end
+    local sh = gp:FindFirstChild("SecretEndingHandler")
+    local eh = gp:FindFirstChild("EndingHandler")
+    task.spawn(function()
+        if sh and sh:IsA("RemoteEvent") then
+            for _, n in ipairs({"Truth Ending","Invitation Ending","Missing Ending","Collab1 Ending","CultInvitation Ending","CultSacrifice Ending"}) do
+                if not running then break end
+                pcall(function() sh:FireServer(n) end)
+                task.wait(0.4)
+            end
+        end
+        if eh and eh:IsA("RemoteEvent") then
+            for _, n in ipairs({"Truth","True","Quiet","Missing","Invitation","Invisible","Incomplete","Good","Failed","Bad","Dead","CultSacrifice","CultInvitation","Collab1"}) do
+                if not running then break end
+                pcall(function() eh:FireServer(n) end)
+                task.wait(0.4)
+            end
+            pcall(function() eh:FireServer("Leave") end)
+        end
+    end)
+    log("Endings fired")
+end
+
+-- ============================================
+-- AUTO CANDY TP (WAIT FOR SPAWN)
+-- ============================================
+local function findAllTargets()
+    local list = {}
+
+    local hw = workspace:FindFirstChild("Halloween")
+    if hw then
+        local sp = hw:FindFirstChild("SpawnPoint")
+        if sp then
+            for _, room in ipairs(sp:GetChildren()) do
+                local item = room:FindFirstChild("TrickOrTreatItem")
+                if item then
+                    local part = item:IsA("BasePart") and item or item:FindFirstChildWhichIsA("BasePart", true)
+                    if part then
+                        table.insert(list, {part = part, name = "Trick:"..room.Name})
+                    end
+                end
+            end
+        end
+    end
+
+    local patrol = workspace:FindFirstChild("Patrol")
+    if patrol then
+        for _, obj in ipairs(patrol:GetDescendants()) do
+            if matchKw(obj.Name, CANDY_KW) then
+                if obj:IsA("Model") or obj:IsA("BasePart") then
+                    local part = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart", true)
+                    if part then
+                        table.insert(list, {part = part, name = "Patrol:"..obj.Name})
+                    end
+                end
+            end
+        end
+    end
+
+    return list
+end
+
+local function candyTPLoop()
+    local hasRunThisCycle = false
+
+    while running and task.wait(0.5) do
+        if S.autoCandyTP then
+            local targets = findAllTargets()
+            if #targets > 0 then
+                for _, entry in ipairs(targets) do
+                    if not running or not S.autoCandyTP then break end
+                    if entry.part and entry.part.Parent then
+                        local h = hrp()
+                        if h then
+                            h.CFrame = entry.part.CFrame + Vector3.new(0, 3, 0)
+                            task.wait(0.15)
+                            interactNearby(20, true)
+                            task.wait(S.autoCandyDelay)
+                        end
+                    end
+                end
+                hasRunThisCycle = true
+            else
+                if hasRunThisCycle then
+                    hasRunThisCycle = false
+                    tpToSpawn()
+                    log("Semua target habis - balik spawn, nunggu respawn")
+                end
+            end
+        else
+            hasRunThisCycle = false
+        end
+    end
+end
+
+-- ============================================
+-- CONFIG
+-- ============================================
+local CONFIG_KEYS = {
+    "espEntity", "espHW", "ws", "noclip", "void",
+    "piket", "instant", "safeTP", "safeRadius",
+    "camMin", "camMax", "camPOV",
+    "promptEnabled", "promptDistance", "tpDelay",
+    "autoCandyTP", "autoCandyDelay"
+}
+
+local function buildConfigTable()
+    local cfg = {}
+    for _, k in ipairs(CONFIG_KEYS) do cfg[k] = S[k] end
+    return cfg
+end
+
+local function saveConfig()
+    if not writefile then
+        Rayfield:Notify({Title="AIKOO", Content="No writefile support!", Duration=3, Image=4483362458})
+        return
+    end
+    local ok, err = pcall(function()
+        writefile(CONFIG_FILE, HttpService:JSONEncode(buildConfigTable()))
+    end)
+    if ok then
+        Rayfield:Notify({Title="AIKOO", Content="Config saved!", Duration=3, Image=4483362458})
+        log("Config saved")
+    else
+        Rayfield:Notify({Title="AIKOO", Content="Save error: " .. tostring(err), Duration=3, Image=4483362458})
+    end
+end
+
+local function syncUI()
+    if ui.espEntity then ui.espEntity:Set(S.espEntity) end
+    if ui.espHW then ui.espHW:Set(S.espHW) end
+    if ui.ws then ui.ws:Set(S.ws) end
+    if ui.noclip then ui.noclip:Set(S.noclip) end
+    if ui.pov then ui.pov:Set(S.camPOV) end
+    if ui.camMin then ui.camMin:Set(S.camMin) end
+    if ui.camMax then ui.camMax:Set(S.camMax) end
+    if ui.piket then ui.piket:Set(S.piket) end
+    if ui.safeTP then ui.safeTP:Set(S.safeTP) end
+    if ui.safeRadius then ui.safeRadius:Set(S.safeRadius) end
+    if ui.promptEnabled then ui.promptEnabled:Set(S.promptEnabled) end
+    if ui.promptDistance then ui.promptDistance:Set(S.promptDistance) end
+    if ui.instant then ui.instant:Set(S.instant) end
+    if ui.tpDelay then ui.tpDelay:Set(S.tpDelay) end
+    if ui.autoCandyTP then ui.autoCandyTP:Set(S.autoCandyTP) end
+    if ui.autoCandyDelay then ui.autoCandyDelay:Set(S.autoCandyDelay) end
+end
+
+local function applyConfig(cfg)
+    for _, k in ipairs(CONFIG_KEYS) do
+        if cfg[k] ~= nil then S[k] = cfg[k] end
+    end
+    if S.noclip ~= nil then S.void = S.noclip end
+    syncUI()
+    applyWS()
+    applyCamera()
+    updateAllPrompts()
+    refreshESP()
+end
+
+local function loadConfig()
+    if not readfile or not isfile then
+        Rayfield:Notify({Title="AIKOO", Content="No readfile support!", Duration=3, Image=4483362458})
+        return
+    end
+    if not isfile(CONFIG_FILE) then
+        Rayfield:Notify({Title="AIKOO", Content="Config file tidak ada!", Duration=3, Image=4483362458})
+        return
+    end
+    local ok, err = pcall(function()
+        applyConfig(HttpService:JSONDecode(readfile(CONFIG_FILE)))
+    end)
+    if ok then
+        Rayfield:Notify({Title="AIKOO", Content="Config loaded!", Duration=3, Image=4483362458})
+        log("Config loaded")
+    else
+        Rayfield:Notify({Title="AIKOO", Content="Load error: " .. tostring(err), Duration=3, Image=4483362458})
+    end
+end
+
+local function deleteConfig()
+    if delfile and isfile and isfile(CONFIG_FILE) then
+        pcall(function() delfile(CONFIG_FILE) end)
+        Rayfield:Notify({Title="AIKOO", Content="Config deleted!", Duration=3, Image=4483362458})
+    else
+        Rayfield:Notify({Title="AIKOO", Content="No config file", Duration=3, Image=4483362458})
+    end
+end
+
+-- ============================================
+-- MAIN TAB
+-- ============================================
+MainTab:CreateSection("Config")
+
+MainTab:CreateButton({Name = "Save Config", Callback = saveConfig})
+MainTab:CreateButton({Name = "Load Config", Callback = loadConfig})
+MainTab:CreateButton({Name = "Delete Config", Callback = deleteConfig})
+
+MainTab:CreateSection("Kabur")
+
+MainTab:CreateButton({Name = "Kabur (All Endings)", Callback = kabur})
+
+MainTab:CreateSection("Player")
+
+ui.ws = MainTab:CreateSlider({
+    Name = "Walkspeed",
+    Range = {8, 200},
+    Increment = 1,
+    Suffix = "WS",
+    CurrentValue = S.ws,
+    Callback = function(v)
+        S.ws = v
+        local h = hum()
+        if h then h.WalkSpeed = v end
+    end
+})
+
+ui.noclip = MainTab:CreateToggle({
+    Name = "NoClip + Anti Void",
+    CurrentValue = false,
+    Callback = function(v)
+        S.noclip = v
+        S.void = v
+        if not v then
+            local c = char()
+            if c then
+                for _, p in ipairs(c:GetDescendants()) do
+                    if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
+                        p.CanCollide = true
+                    end
+                end
+            end
+        end
+    end
+})
+
+ui.pov = MainTab:CreateToggle({
+    Name = "POV Mode (First Person)",
+    CurrentValue = false,
+    Callback = function(v)
+        S.camPOV = v
+        applyCamera()
+    end
+})
+
+ui.camMin = MainTab:CreateSlider({
+    Name = "Min Zoom",
+    Range = {0.5, 20},
+    Increment = 0.5,
+    Suffix = "",
+    CurrentValue = S.camMin,
+    Callback = function(v)
+        S.camMin = v
+        S.camPOV = false
+        if ui.pov then ui.pov:Set(false) end
+        applyCamera()
+    end
+})
+
+ui.camMax = MainTab:CreateSlider({
+    Name = "Max Zoom",
+    Range = {50, 2000},
+    Increment = 10,
+    Suffix = "",
+    CurrentValue = S.camMax,
+    Callback = function(v)
+        S.camMax = v
+        S.camPOV = false
+        if ui.pov then ui.pov:Set(false) end
+        applyCamera()
+    end
+})
+
+MainTab:CreateButton({
+    Name = "Reset Camera",
+    Callback = function()
+        S.camPOV = false
+        S.camMin = 0.5
+        S.camMax = 400
+        if ui.pov then ui.pov:Set(false) end
+        if ui.camMin then ui.camMin:Set(0.5) end
+        if ui.camMax then ui.camMax:Set(400) end
+        applyCamera()
+    end
+})
+
+MainTab:CreateSection("ESP")
+
+ui.espEntity = MainTab:CreateToggle({
+    Name = "ESP Entities",
+    CurrentValue = false,
+    Callback = function(v) S.espEntity = v refreshESP() end
+})
+
+ui.espHW = MainTab:CreateToggle({
+    Name = "ESP Halloween",
+    CurrentValue = false,
+    Callback = function(v) S.espHW = v refreshESP() end
+})
+
+MainTab:CreateSection("Auto & Interact")
+
+ui.piket = MainTab:CreateToggle({
+    Name = "Auto Piket",
+    CurrentValue = false,
+    Callback = function(v)
+        S.piket = v
+        if not v then broomEquipped = false end
+    end
+})
+
+ui.safeTP = MainTab:CreateToggle({
+    Name = "Safe Zone (Auto TP to Spawn)",
+    CurrentValue = false,
+    Callback = function(v)
+        S.safeTP = v
+    end
+})
+
+ui.safeRadius = MainTab:CreateSlider({
+    Name = "Safe Zone Radius",
+    Range = {10, 100},
+    Increment = 5,
+    Suffix = " stud",
+    CurrentValue = S.safeRadius,
+    Callback = function(v) S.safeRadius = v end
+})
+
+MainTab:CreateButton({
+    Name = "TP to Spawn Now",
+    Callback = function() tpToSpawn() end
+})
+
+ui.promptEnabled = MainTab:CreateToggle({
+    Name = "Prompt Distance",
+    CurrentValue = false,
+    Callback = function(v)
+        S.promptEnabled = v
+        updateAllPrompts()
+    end
+})
+
+ui.promptDistance = MainTab:CreateSlider({
+    Name = "Prompt Radius",
+    Range = {1, 1000},
+    Increment = 1,
+    Suffix = " stud",
+    CurrentValue = S.promptDistance,
+    Callback = function(v)
+        S.promptDistance = v
+        if S.promptEnabled then updateAllPrompts() end
+    end
+})
+
+ui.instant = MainTab:CreateToggle({
+    Name = "Instant Interact",
+    CurrentValue = false,
+    Callback = function(v) S.instant = v end
+})
+
+-- ============================================
+-- RUANGAN TAB
+-- ============================================
+RuanganTab:CreateSection("Teleport")
+
+local tpList = {
+    {"Lobby", {"Spawn"}},
+    {"Sterilization", {"RuangMandi","Trolli3"}},
+    {"Morgue", {"RuangMayat","Trolli"}},
+    {"Embalming", {"RuangPenyiapan","Trolli"}},
+    {"Storage", {"RuangPenyimpanan","Trolli2"}},
+    {"Electrical", {"Lampu","Floor2","LampuElectric"}},
+    {"Autopsy", {"RuangDokter","Chair Office 2"}},
+    {"Cremation", {"RuangKremasi","Trolli"}},
+}
+
+for _, loc in ipairs(tpList) do
+    RuanganTab:CreateButton({
+        Name = loc[1],
+        Callback = function()
+            local cur = workspace
+            for _, n in ipairs(loc[2]) do cur = cur and cur:FindFirstChild(n) end
+            local h = hrp()
+            if cur and h then
+                local part = cur:IsA("BasePart") and cur or cur:FindFirstChildWhichIsA("BasePart", true)
+                if part then h.CFrame = part.CFrame + Vector3.new(0,3,0) end
+            end
+        end
+    })
+end
+
+-- ============================================
+-- HALLOWEEN TAB
+-- ============================================
+HalloweenTab:CreateSection("Auto TP Candy & TrickOrTreat")
+
+ui.autoCandyTP = HalloweenTab:CreateToggle({
+    Name = "Auto TP (TrickOrTreat + Patrol Candy)",
+    CurrentValue = false,
+    Callback = function(v)
+        S.autoCandyTP = v
+        if v then
+            Rayfield:Notify({Title="AIKOO", Content="Auto TP ON - nunggu target muncul", Duration=3, Image=4483362458})
+        end
+    end
+})
+
+ui.autoCandyDelay = HalloweenTab:CreateSlider({
+    Name = "Delay Setelah TP",
+    Range = {0.1, 3},
+    Increment = 0.1,
+    Suffix = "s",
+    CurrentValue = S.autoCandyDelay,
+    Callback = function(v) S.autoCandyDelay = v end
+})
+
+-- ============================================
+-- LOOPS
+-- ============================================
+trackConn(RunService.Stepped:Connect(function()
+    if not running then return end
+    applyWS()
+end))
+
+trackConn(RunService.Stepped:Connect(function()
+    if not running then return end
+    if S.noclip then
+        local c = char()
+        if c then
+            for _, p in ipairs(c:GetDescendants()) do
+                if p:IsA("BasePart") then p.CanCollide = false end
+            end
+        end
+    end
+    if S.void then
+        local h = hrp()
+        if h and h.Position.Y < -50 then h.CFrame = CFrame.new(0, 50, 0) end
+    end
+end))
+
+trackConn(RunService.Stepped:Connect(function()
+    safeZoneCheck()
+end))
+
+task.spawn(function()
+    while running and task.wait(0.1) do applyCamera() end
+end)
+
+task.spawn(function()
+    while running and task.wait(1) do
+        if S.espEntity or S.espHW then refreshESP() end
+    end
+end)
+
+task.spawn(function()
+    while running and task.wait(0.5) do
+        if S.piket then
+            if hrp() then
+                pcall(doPiket)
+                task.wait(0.5)
+            end
+        end
+    end
+end)
+
+task.spawn(function()
+    while running and task.wait(0.3) do
+        if hrp() then interactNearby(20, true) end
+    end
+end)
+
+task.spawn(candyTPLoop)
+
+task.spawn(function()
+    while running and task.wait(1) do
+        local gp = ReplicatedStorage:FindFirstChild("Gameplay")
+        local ph = gp and gp:FindFirstChild("PhoneHandler")
+        if ph and ph:IsA("RemoteEvent") then
+            pcall(function() ph:FireServer("Accept") end)
+        end
+    end
+end)
+
+task.spawn(function()
+    while running and task.wait(0.5) do
+        local lobby = workspace:FindFirstChild("Lobby")
+        local frontTable = lobby and lobby:FindFirstChild("FrontTable")
+        local phone = frontTable and frontTable:FindFirstChild("Phone")
+        if phone then
+            if phone:IsA("BasePart") then
+                for _, obj in ipairs(phone:GetChildren()) do
+                    if obj:IsA("ProximityPrompt") and obj.Enabled then
+                        pcall(function()
+                            obj.MaxActivationDistance = 999
+                            obj.HoldDuration = 0
+                            obj.RequiresLineOfSight = false
+                            fireproximityprompt(obj)
+                        end)
+                    end
+                end
+            end
+            for _, obj in ipairs(phone:GetDescendants()) do
+                if obj:IsA("ProximityPrompt") and obj.Enabled then
+                    pcall(function()
+                        obj.MaxActivationDistance = 999
+                        obj.HoldDuration = 0
+                        obj.RequiresLineOfSight = false
+                        fireproximityprompt(obj)
+                    end)
+                end
+            end
+        end
+    end
+end)
+
+task.spawn(function()
+    task.wait(0.5)
+    if not running then return end
+    local h = hum()
+    if h then bindHumanoid(h) end
+    applyCamera()
+
+    if readfile and isfile and isfile(CONFIG_FILE) then
+        task.wait(0.3)
+        pcall(function()
+            applyConfig(HttpService:JSONDecode(readfile(CONFIG_FILE)))
+            log("Auto-loaded config")
+        end)
+    end
+end)
+
+trackConn(player.CharacterAdded:Connect(function(c)
+    if not running then return end
+    task.wait(0.5)
+    if not running then return end
+    local h = c:FindFirstChildOfClass("Humanoid")
+    if h then
+        bindHumanoid(h)
+        broomEquipped = false
+    end
+    applyCamera()
+end))
+
+log("Loaded!")
